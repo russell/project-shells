@@ -142,7 +142,7 @@ key will be bound in a non-global keymap."
   "Keys used to create terminal buffers.
 
 By default shell mode will be used, but for keys in
-‘project-shells-term-keys’, ansi terminal mode will be used.  This
+'project-shells-term-keys', ansi terminal mode will be used.  This
 should be a subset of poject-shells-keys."
   :group 'project-shells
   :type '(repeat string))
@@ -151,7 +151,7 @@ should be a subset of poject-shells-keys."
   "Keys used to create eshell buffers.
 
 By default shell mode will be used, but for keys in
-‘project-shells-eshell-keys’, eshell mode will be used.  This
+'project-shells-eshell-keys', eshell mode will be used.  This
 should be a subset of poject-shells-keys."
   :group 'project-shells
   :type '(repeat string))
@@ -238,9 +238,13 @@ should be a subset of poject-shells-keys."
                (push (current-buffer) saved-shell-buffer-list))
         (ghostel (unless (require 'ghostel nil t)
                    (error "ghostel is not available"))
-                 (ghostel t)
-                 (rename-buffer name)
-                 (push (current-buffer) saved-shell-buffer-list))
+                 (let ((buf (get-buffer-create name)))
+                   (with-current-buffer buf
+                     (ghostel-mode)
+                     (setq-local ghostel-buffer-name-function nil))
+                   (ghostel-exec buf shell-file-name project-shells-term-args)
+                   (switch-to-buffer buf)
+                   (push buf saved-shell-buffer-list)))
         (term (ansi-term "/bin/sh")
               (rename-buffer name)
               (push (current-buffer) saved-shell-buffer-list))
@@ -251,7 +255,8 @@ should be a subset of poject-shells-keys."
                  (shell (current-buffer)))
                (push (current-buffer) saved-shell-buffer-list))
         (eshell (let ((eshell-buffer-name name))
-                  (eshell)))
+                  (eshell))
+                (push (current-buffer) saved-shell-buffer-list))
         (gptel (unless (require 'gptel nil t)
                  (error "gptel is not available"))
                (unless (require 'gptel-agent nil t)
@@ -270,7 +275,7 @@ should be a subset of poject-shells-keys."
                    (unless gptel-max-tokens
                      (setq-local gptel-max-tokens 8192))
                    (rename-buffer name))
-                 (push gptel-buf saved-shell-buffer-list))))))
+                 (push gptel-buf saved-shell-buffer-list)))))
   ) ;; end let
 
 (cl-defun project-shells-send-shell-command (cmdline)
