@@ -97,7 +97,7 @@ function (symbol or lambda)."
 		       :value-type (list :tag "Shell setup"
 					 (string :tag "Name")
 					 (choice :tag "Directory" string (const ask))
-					 (choice :tag "Type" (const term) (const shell) (const eshell) (const vterm))
+					 (choice :tag "Type" (const term) (const shell) (const eshell) (const vterm) (const ghostel))
 					 (choice :tag "Function" (const nil) function)))))
 
 (defcustom project-shells-default-init-func 'project-shells-init-sh
@@ -115,6 +115,14 @@ be bound in a non-global keymap."
   "Keys used to create vterm buffers.
 
 One vterm will be created for each key.  Usually these key will
+be bound in a non-global keymap."
+  :group 'project-shells
+  :type '(repeat string))
+
+(defcustom project-shells-ghostel-keys nil
+  "Keys used to create ghostel buffers.
+
+One ghostel will be created for each key.  Usually these key will
 be bound in a non-global keymap."
   :group 'project-shells
   :type '(repeat string))
@@ -216,6 +224,10 @@ should be a subset of poject-shells-keys."
       (cl-ecase type
 	(vterm (vterm)
 	      (rename-buffer name))
+	(ghostel (unless (require 'ghostel nil t)
+	           (error "ghostel is not available"))
+	         (ghostel)
+	         (rename-buffer name))
 	(term (ansi-term "/bin/sh")
 	      (rename-buffer name))
 	(shell (pop-to-buffer name)
@@ -240,7 +252,8 @@ used in shell initialized function."
     (when (and (not (eq type 'eshell)) (file-exists-p init-file))
       (cl-ecase type
 	(shell (project-shells-send-shell-command cmdline))
-	(term (term-send-raw-string (concat cmdline "\n")))))))
+	(term (term-send-raw-string (concat cmdline "\n")))
+	(ghostel (ghostel-send-string (concat cmdline "\n")))))))
 
 (cl-defun project-shells--project-name ()
   (or project-shells-project-name
@@ -290,6 +303,9 @@ used in shell initialized function."
     (concat "exec " (project-shells--command-string
 		     (cons prog project-shells-term-args)) "\n")))
 
+(cl-defun project-shells--ghostel-command-string ()
+  (project-shells--term-command-string))
+
 ;;;###autoload
 (cl-defun project-shells-activate-for-key (key &optional proj proj-root)
   "Create or switch to the shell buffer for the key, the project
@@ -307,6 +323,7 @@ name, and the project root directory."
 		    ((member key project-shells-term-keys) 'term)
 		    ((member key project-shells-eshell-keys) 'eshell)
 		    ((member key project-shells-vterm-keys) 'vterm)
+		    ((member key project-shells-ghostel-keys) 'ghostel)
 		    (t 'shell)))
 	     (dir (or (cl-second shell-info) proj-root))
 	     (func (cl-fourth shell-info))
@@ -330,6 +347,8 @@ name, and the project root directory."
 	      (cl-case type
 		(term
 		 (term-send-raw-string (project-shells--term-command-string)))
+		(ghostel
+		 (ghostel-send-string (project-shells--ghostel-command-string)))
 		(eshell
 		 (setq-local eshell-history-file-name
 			     (project-shells--histfile-name session-dir))
