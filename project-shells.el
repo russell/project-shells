@@ -44,8 +44,11 @@
 ;; can use them whichever project I am working on.  Project shells is
 ;; an Emacs program to let my life easier via helping me to manage all
 ;; these shell/terminal buffers.
-
+;;
 ;; The ssh support code is based on Ian Eure's nssh.  Thanks Ian!
+;;
+;; The gptel support code integrates with gptel-agent for AI-assisted
+;; per-project agent sessions.
 
 ;;; Code:
 
@@ -97,7 +100,7 @@ function (symbol or lambda)."
 		       :value-type (list :tag "Shell setup"
 					 (string :tag "Name")
 					 (choice :tag "Directory" string (const ask))
-					 (choice :tag "Type" (const term) (const shell) (const eshell) (const vterm) (const ghostel))
+					 (choice :tag "Type" (const term) (const shell) (const eshell) (const vterm) (const ghostel) (const gptel))
 					 (choice :tag "Function" (const nil) function)))))
 
 (defcustom project-shells-default-init-func 'project-shells-init-sh
@@ -124,6 +127,14 @@ be bound in a non-global keymap."
 
 One ghostel will be created for each key.  Usually these key will
 be bound in a non-global keymap."
+  :group 'project-shells
+  :type '(repeat string))
+
+(defcustom project-shells-gptel-keys nil
+  "Keys used to create gptel-agent buffers.
+
+One gptel-agent session will be created for each key.  Usually these
+key will be bound in a non-global keymap."
   :group 'project-shells
   :type '(repeat string))
 
@@ -222,22 +233,45 @@ should be a subset of poject-shells-keys."
   (cl-defun project-shells--create (name dir &optional (type 'shell))
     (let ((default-directory (expand-file-name (or dir "~/"))))
       (cl-ecase type
-	(vterm (vterm)
-	      (rename-buffer name))
-	(ghostel (unless (require 'ghostel nil t)
-	           (error "ghostel is not available"))
-	         (ghostel)
-	         (rename-buffer name))
-	(term (ansi-term "/bin/sh")
-	      (rename-buffer name))
-	(shell (pop-to-buffer name)
-	       (unless (comint-check-proc (current-buffer))
-		 (setf comint-prompt-read-only t)
-		 (cd dir)
-		 (shell (current-buffer))))
-	(eshell (let ((eshell-buffer-name name))
-		  (eshell))))
-      (push (current-buffer) saved-shell-buffer-list))))
+        (vterm (vterm)
+               (rename-buffer name)
+               (push (current-buffer) saved-shell-buffer-list))
+        (ghostel (unless (require 'ghostel nil t)
+                   (error "ghostel is not available"))
+                 (ghostel)
+                 (rename-buffer name)
+                 (push (current-buffer) saved-shell-buffer-list))
+        (term (ansi-term "/bin/sh")
+              (rename-buffer name)
+              (push (current-buffer) saved-shell-buffer-list))
+        (shell (pop-to-buffer name)
+               (unless (comint-check-proc (current-buffer))
+                 (setf comint-prompt-read-only t)
+                 (cd dir)
+                 (shell (current-buffer)))
+               (push (current-buffer) saved-shell-buffer-list))
+        (eshell (let ((eshell-buffer-name name))
+                  (eshell)))
+        (gptel (unless (require 'gptel nil t)
+                 (error "gptel is not available"))
+               (unless (require 'gptel-agent nil t)
+                 (error "gptel-agent is not available"))
+               (let ((gptel-buf
+                      (gptel (generate-new-buffer-name name)
+                             nil
+                             nil
+                             'interactive)))
+                 (with-current-buffer gptel-buf
+                   (setq default-directory (or dir "~/"))
+                   (gptel-agent-update)
+                   (gptel--apply-preset
+                    'gptel-agent
+                    (lambda (sym val) (set (make-local-variable sym) val)))
+                   (unless gptel-max-tokens
+                     (setq-local gptel-max-tokens 8192))
+                   (rename-buffer name))
+                 (push gptel-buf saved-shell-buffer-list))))))
+  ) ;; end let
 
 (cl-defun project-shells-send-shell-command (cmdline)
   "Send the command line to the current (shell) buffer.  Can be
@@ -305,6 +339,7 @@ name, and the project root directory."
 	(let* ((proj-root (or proj-root (project-shells--project-root proj)))
 	       (type (cond
 		      ((cl-third shell-info))
+		      ((member key project-shells-gptel-keys) 'gptel)
 		      ((member key project-shells-term-keys) 'term)
 		      ((member key project-shells-eshell-keys) 'eshell)
 		      ((member key project-shells-vterm-keys) 'vterm)
