@@ -238,7 +238,7 @@ should be a subset of poject-shells-keys."
                (push (current-buffer) saved-shell-buffer-list))
         (ghostel (unless (require 'ghostel nil t)
                    (error "ghostel is not available"))
-                 (ghostel)
+                 (ghostel t)
                  (rename-buffer name)
                  (push (current-buffer) saved-shell-buffer-list))
         (term (ansi-term "/bin/sh")
