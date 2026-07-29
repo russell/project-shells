@@ -275,8 +275,7 @@ should be a subset of poject-shells-keys."
                    (unless gptel-max-tokens
                      (setq-local gptel-max-tokens 8192))
                    (rename-buffer name))
-                 (push gptel-buf saved-shell-buffer-list)))))
-  ) ;; end let
+                 (push gptel-buf saved-shell-buffer-list)))))))
 
 (cl-defun project-shells-send-shell-command (cmdline)
   "Send the command line to the current (shell) buffer.  Can be
